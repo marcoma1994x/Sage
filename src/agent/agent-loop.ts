@@ -2,7 +2,7 @@ import type { CommandRegistry } from '../commands/registry.js'
 import type { CommandContext } from '../commands/type.js'
 import type { MessageManager } from '../context/message-manager.js'
 
-import type { LLMProvider, Message, ToolCall } from '../llm/provider.js'
+import type { ChatResult, LLMProvider, Message, ToolCall } from '../llm/provider.js'
 import type { SessionStore } from '../memory/session-store.js'
 import type { TodoManager } from '../planning/todo-manager.js'
 import type { ToolRegistry } from '../tools/registry.js'
@@ -23,11 +23,6 @@ interface AgentLoopOptions {
   maxIterations: number;
   todoManager: TodoManager;
   messageManager: MessageManager
-}
-
-interface StreamResult {
-  text: string;
-  toolCalls: ToolCall[];
 }
 
 export interface AgentRunResult {
@@ -191,7 +186,7 @@ export class AgentLoop {
    */
   private async streamLLMResponse(
     checkpointId: string,
-  ): Promise<StreamResult | null> {
+  ): Promise<ChatResult | null> {
     // 创建 checkpoint
     this.messageManager.createCheckpoint(checkpointId)
 
