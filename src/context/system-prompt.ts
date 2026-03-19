@@ -64,6 +64,7 @@ export function buildSystemPrompt(): string {
 - Use Edit for small changes to existing files (old_string → new_string replacement).
 - Use Write for creating new files or completely rewriting existing files.
 - Use Bash for running commands: tests, builds, git, package managers, etc.
+- Use todo_write to manage task progress when handling multi-step tasks (≥3 steps).
 - When editing a file, always Read it first to see the exact content.
 
 ## Todo List (IMPORTANT)
