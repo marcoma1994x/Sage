@@ -124,6 +124,7 @@ export class AgentRunner {
     this.agent.on(
       'run:complete',
       ({ messages, iteration, reason }) => {
+        // 保存到文件中，持久化会话
         this.sessionStore.save(messages)
 
         const statusIcon = reason === 'completed' ? '✅' : '⚠️'

@@ -3,6 +3,7 @@ import type { TodoManager } from '../planning/todo-manager.js'
 import type { Tool, ToolResult } from '../tools/type.js'
 import chalk from 'chalk'
 import { AgentLoop } from '../agent/agent-loop.js'
+import { MessageManager } from '../context/message-manager.js'
 import { buildSubAgentPrompt, createSubAgentToolRegistry } from './subagent.js'
 
 interface TaskInput {
@@ -57,6 +58,7 @@ export function createTaskTool(provider: LLMProvider, todoManager: TodoManager):
         systemPrompt: buildSubAgentPrompt(),
         maxIterations: max_iterations,
         todoManager,
+        messageManager: new MessageManager(),
       })
 
       // 执行子任务

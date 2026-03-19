@@ -29,9 +29,11 @@ export class MessageManager {
    */
   private checkpoints: Map<string, Message[]> = new Map()
 
-  constructor(messages: Message[]) {
-    // 恢复历史消息
-    this.messages = messages
+  constructor(messages?: Message[]) {
+    if (messages) {
+      // 恢复历史消息
+      this.messages = messages
+    }
   }
 
   /**
