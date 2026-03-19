@@ -56,7 +56,6 @@ export function createTaskTool(provider: LLMProvider, todoManager: TodoManager):
         tools: createSubAgentToolRegistry({ provider, todoManager }),
         systemPrompt: buildSubAgentPrompt(),
         maxIterations: max_iterations,
-        silent: true,
         todoManager,
       })
 

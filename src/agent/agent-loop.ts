@@ -5,11 +5,11 @@ import type { LLMProvider, Message, ToolCall } from '../llm/provider.js'
 import type { SessionStore } from '../memory/session-store.js'
 import type { TodoManager } from '../planning/todo-manager.js'
 import type { ToolRegistry } from '../tools/registry.js'
-import { EventEmitter } from 'node:events'
+import type { AgentLoopEvents } from './events.js'
 
+import { EventEmitter } from 'node:events'
 import { Compaction } from '../context/compaction.js'
 import { MessageManager } from '../context/message-manager.js'
-import { TerminalRenderer } from '../io/renderer.js'
 import { signal } from '../process/signal.js'
 import { withTimeout } from '../utils/timeout.js'
 import { truncateToolResult } from '../utils/truncate.js'
@@ -21,7 +21,6 @@ interface AgentLoopOptions {
   commands?: CommandRegistry;
   sessionStore?: SessionStore; // 只给 commands 用
   maxIterations: number;
-  silent?: boolean; // 静默模式 - subagent 中使用
   todoManager: TodoManager;
 }
 
@@ -47,7 +46,6 @@ export class AgentLoop {
   private MAX_ITERATIONS = 20
   private emitter = new EventEmitter()
   private sessionStore?: SessionStore
-  private readonly silent: boolean
 
   constructor(options: AgentLoopOptions) {
     this.provider = options.provider
@@ -57,15 +55,39 @@ export class AgentLoop {
     this.commands = options.commands
     this.MAX_ITERATIONS = options.maxIterations ?? 20
     this.sessionStore = options.sessionStore
-    this.silent = options.silent ?? false
     this.todoManager = options.todoManager
   }
 
-  private emit(event: 'run:complete', messages: readonly Message[]): void {
-    this.emitter.emit(event, messages)
+  /**
+   * 发出事件（类型安全）
+   *
+   * 私有方法，只能在 AgentLoop 内部调用
+   * 使用泛型确保事件名和参数类型匹配
+   *
+   * @param event - 事件名（必须是 AgentLoopEvents 中定义的键）
+   * @param args - 事件参数（类型由 AgentLoopEvents[event] 决定）
+   */
+  private emit<K extends keyof AgentLoopEvents>(
+    event: K,
+    ...args: AgentLoopEvents[K] extends void ? [] : [AgentLoopEvents[K]]
+  ): void {
+    this.emitter.emit(event, ...args)
   }
 
-  on(event: 'run:complete', listener: (messages: Message[]) => void): this {
+  /**
+   * 监听事件（类型安全）
+   *
+   * 公开方法，外部可以调用
+   * 使用泛型确保监听器的参数类型与事件匹配
+   *
+   * @param event - 事件名
+   * @param listener - 事件监听器（参数类型由 AgentLoopEvents[event] 决定）
+   * @returns this（支持链式调用）
+   */
+  on<K extends keyof AgentLoopEvents>(
+    event: K,
+    listener: (data: AgentLoopEvents[K]) => void,
+  ): this {
     this.emitter.on(event, listener)
     return this
   }
@@ -89,6 +111,9 @@ export class AgentLoop {
     let reason: AgentRunResult['reason'] = 'max_iterations'
 
     for (let i = 0; i < this.MAX_ITERATIONS; i++) {
+      // 发出迭代开始事件
+      this.emit('iteration:start', { iteration: i + 1 })
+
       if (signal.aborted) {
         reason = 'interrupted'
         break
@@ -119,8 +144,10 @@ export class AgentLoop {
 
       this.messageManager.addAssistantMessage(result.text, result.toolCalls)
       await this.executeToolCalls(result.toolCalls)
+      // 发出迭代结束事件
+      this.emit('iteration:end', { iteration: i + 1 })
     }
-    this.emit('run:complete', this.messageManager.getMessages())
+    this.emit('run:complete', { messages: this.messageManager.getMessages() })
 
     if (this.todoManager.hasTodos()) {
       const stats = this.todoManager.getStats()
@@ -168,8 +195,10 @@ export class AgentLoop {
 
     let text = ''
     let toolCalls: ToolCall[] = []
-    const renderer = new TerminalRenderer()
     try {
+      // 发出 LLM 开始事件
+      this.emit('llm:start')
+
       for await (const event of this.provider.chatStream(
         this.messageManager.getMessages(),
         this.tools.getDefinitions(),
@@ -177,42 +206,30 @@ export class AgentLoop {
       )) {
         switch (event.type) {
           case 'text_delta':
-            if (!this.silent) {
-              renderer.write(event.text)
-            }
+            // 发出文本片段事件
+            this.emit('llm:text', { text: event.text })
             break
           case 'tool_call_start':
-            if (!this.silent) {
-              renderer.flush()
-              console.log(`\n[Tool]: invoke tool「${event.name}」`)
-            }
             break
           case 'done':
             text = event.result.text
             toolCalls = event.result.toolCalls
+            // 发出 LLM 完成事件
+            this.emit('llm:done', { text, toolCalls })
             break
         }
       }
     }
     catch (error) {
       if (signal.aborted) {
-        if (!this.silent) {
-          renderer.flush()
-        }
         this.messageManager.rollback(checkpointId)
         return null
       }
 
-      const msg = error instanceof Error ? error.message : String(error)
-      if (!this.silent) {
-        console.error(`\n[Error]: ${msg}`)
-      }
+      const err = error instanceof Error ? error : new Error(String(error))
+      this.emit('llm:error', { error: err })
       this.messageManager.rollback(checkpointId)
       return null
-    }
-
-    if (!this.silent) {
-      renderer.flush()
     }
 
     if (signal.aborted) {
@@ -236,31 +253,31 @@ export class AgentLoop {
         continue
       }
 
-      /*  console.log(
-        `[Tool]: call tool-${tc.name} with input (${JSON.stringify(tc.input)})`,
-      ) */
-
       let toolResult: { content: string }
       try {
+        // 发出工具开始执行事件
+        this.emit('tool:start', { id: tc.id, name: tc.name, input: tc.input })
+
         toolResult = await withTimeout(tool.execute(tc.input), 30000, tc.name)
       }
       catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err)
-        if (!this.silent) {
-          console.error(`[Tool Error]: ${tc.name} failed: ${errMsg}`)
-        }
+
+        // 发出工具错误事件
+        this.emit('tool:error', { id: tc.id, name: tc.name, error: errMsg })
+
         toolResult = { content: `Error: ${errMsg}` }
       }
 
       const truncatedResult = truncateToolResult(toolResult.content)
-      /*  console.log(
-        `[Tool]: ${tc.name}'s result is:(${JSON.stringify(truncatedResult)})`,
-      ) */
+      // 发出工具完成事件
+      this.emit('tool:done', {
+        id: tc.id,
+        name: tc.name,
+        result: truncatedResult,
+      })
 
-      this.messageManager.addToolResult(
-        tc.id,
-        truncatedResult,
-      )
+      this.messageManager.addToolResult(tc.id, truncatedResult)
     }
   }
 
@@ -269,15 +286,16 @@ export class AgentLoop {
     if (!this.compaction.shouldCompact(messages, this.systemPrompt))
       return
 
-    if (!this.silent) {
-      console.log('\n[Compaction]: context approaching limit, compacting...')
-    }
-    const compactedMessages = await this.compaction.compact(messages, this.provider)
-    this.messageManager.setMessages(compactedMessages)
+    // 发出压缩开始事件
+    this.emit('compaction:start')
 
-    if (!this.silent) {
-      console.log('[Compaction]: done.')
-    }
+    const compactedMessages = await this.compaction.compact(
+      messages,
+      this.provider,
+    )
+    // 发出压缩完成事件
+    this.emit('compaction:done')
+    this.messageManager.setMessages(compactedMessages)
   }
 
   setMessages(messages: Message[]): void {
