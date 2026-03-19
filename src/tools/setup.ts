@@ -20,7 +20,7 @@ const commonTools = [
 
 export function setupActionTools(options: {
   includeTask?: boolean;
-  provider?: LLMProvider;
+  provider: LLMProvider;
   todoManager: TodoManager
 }): ToolRegistry {
   const registry = new ToolRegistry()

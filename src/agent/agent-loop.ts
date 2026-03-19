@@ -92,7 +92,13 @@ export class AgentLoop {
         reason = 'interrupted'
         break
       }
-      this.todoManager.incrementRound()
+
+      this.todoManager.incrementRound() // 移到这里
+      // 检查提醒
+      if (this.todoManager.needsReminder()) {
+        const reminder = '\n\n[Reminder] You have an active todo list...'
+        this.messages.push({ role: 'user', content: reminder })
+      }
 
       const checkpoint = this.messages.length
       const result = await this.streamLLMResponse(checkpoint)
@@ -118,6 +124,15 @@ export class AgentLoop {
       await this.executeToolCalls(result.toolCalls)
     }
     this.emit('run:complete', this.messages)
+
+    if (this.todoManager.hasTodos()) {
+      const stats = this.todoManager.getStats()
+      if (stats.completed === stats.total) {
+        console.log('\n✅ All todos completed!')
+        this.todoManager.clear()
+      }
+    }
+
     return {
       success,
       text: lastAssistantText,
@@ -240,9 +255,7 @@ export class AgentLoop {
 
       this.messages.push({
         role: 'tool',
-        content: this.todoManager.needsReminder()
-          ? `<reminder>Update your todo list to track progress.</reminder>\n\n${truncatedResult}`
-          : truncatedResult,
+        content: truncatedResult,
         toolCallId: tc.id,
       })
     }

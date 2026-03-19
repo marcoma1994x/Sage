@@ -42,13 +42,10 @@ export function createTodosCommand(todoManager: TodoManager): Command {
 
       // 显示每个 todo 项
       const items = todoManager.getItems()
+
       items.forEach((item, index) => {
         const icon
-          = item.status === 'completed'
-            ? '✅'
-            : item.status === 'in_progress'
-              ? '🔄'
-              : '⏳'
+          = todoManager.getStatusIcon(item.status)
         console.log(`${icon} ${index + 1}. ${item.content}`)
       })
 

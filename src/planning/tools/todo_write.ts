@@ -62,28 +62,7 @@ STATUS VALUES:
 - "pending": Not started yet
 - "in_progress": Currently working on (only one allowed)
 - "completed": Finished
-
-EXAMPLE:
-User: "Add user authentication"
-You should call:
-{
-  "items": [
-    {"id": "1", "content": "Create User model with email/password fields", "status": "pending"},
-    {"id": "2", "content": "Add bcrypt for password hashing", "status": "pending"},
-    {"id": "3", "content": "Implement login/logout endpoints", "status": "pending"},
-    {"id": "4", "content": "Write authentication tests", "status": "pending"}
-  ]
-}
-
-Then after completing step 1:
-{
-  "items": [
-    {"id": "1", "content": "Create User model with email/password fields", "status": "completed"},
-    {"id": "2", "content": "Add bcrypt for password hashing", "status": "in_progress"},
-    {"id": "3", "content": "Implement login/logout endpoints", "status": "pending"},
-    {"id": "4", "content": "Write authentication tests", "status": "pending"}
-  ]
-}`,
+`,
 
       /**
        * 输入参数的 JSON Schema

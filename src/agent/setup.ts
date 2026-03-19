@@ -33,7 +33,7 @@ export interface AgentDependencies {
  * 组装 Agent 的所有依赖
  * @returns Agent 依赖对象
  */
-export function setupAgent(provider?: LLMProvider): AgentDependencies {
+export function setupAgent(provider: LLMProvider): AgentDependencies {
   // 1. 创建 TodoManager（单例）
   const todoManager = new TodoManager()
 

@@ -126,7 +126,7 @@ export class TodoManager {
    * @param status - Todo 状态
    * @returns 对应的 emoji 图标
    */
-  private getStatusIcon(status: TodoStatus): string {
+  getStatusIcon(status: TodoStatus): string {
     switch (status) {
       case 'completed':
         return '✅'

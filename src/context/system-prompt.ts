@@ -85,17 +85,27 @@ RULES:
 - Use specific, measurable task descriptions
 - Always update the list to show progress
 
-Example:
-User: "Add user authentication"
-You should:
-1. Call todo_write with plan:
-   [{"id":"1", "content":"Create User model", "status":"pending"},
-    {"id":"2", "content":"Add auth middleware", "status":"pending"},
-    {"id":"3", "content":"Write tests", "status":"pending"}]
-2. Execute step 1, then update:
-   [{"id":"1", "content":"Create User model", "status":"completed"},
-    {"id":"2", "content":"Add auth middleware", "status":"in_progress"},
-    {"id":"3", "content":"Write tests", "status":"pending"}]
+EXAMPLE:
+- User: "Add user authentication"
+- You should call:
+{
+  "items": [
+    {"id": "1", "content": "Create User model with email/password fields", "status": "pending"},
+    {"id": "2", "content": "Add bcrypt for password hashing", "status": "pending"},
+    {"id": "3", "content": "Implement login/logout endpoints", "status": "pending"},
+    {"id": "4", "content": "Write authentication tests", "status": "pending"}
+  ]
+}
+
+Then after completing step 1:
+{
+  "items": [
+    {"id": "1", "content": "Create User model with email/password fields", "status": "completed"},
+    {"id": "2", "content": "Add bcrypt for password hashing", "status": "in_progress"},
+    {"id": "3", "content": "Implement login/logout endpoints", "status": "pending"},
+    {"id": "4", "content": "Write authentication tests", "status": "pending"}
+  ]
+}
 
 ## Environment
 Working directory: ${cwd}
