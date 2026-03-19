@@ -8,7 +8,7 @@ export function countTokens(text: string): number {
   return encoder.encode(text).length
 }
 
-export function countMessageTokens(messages: Message[]): number {
+export function countMessageTokens(messages: readonly Message[]): number {
   let total = 0
   for (const msg of messages) {
     // 每条 message 有 ~4 tokens 的结构开销（role、分隔符等），这是 OpenAI 官方文档给的经验值

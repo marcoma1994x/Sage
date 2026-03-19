@@ -8,6 +8,7 @@ import type { ToolRegistry } from '../tools/registry.js'
 import { EventEmitter } from 'node:events'
 
 import { Compaction } from '../context/compaction.js'
+import { MessageManager } from '../context/message-manager.js'
 import { TerminalRenderer } from '../io/renderer.js'
 import { signal } from '../process/signal.js'
 import { withTimeout } from '../utils/timeout.js'
@@ -21,7 +22,7 @@ interface AgentLoopOptions {
   sessionStore?: SessionStore; // 只给 commands 用
   maxIterations: number;
   silent?: boolean; // 静默模式 - subagent 中使用
-  todoManager: TodoManager
+  todoManager: TodoManager;
 }
 
 interface StreamResult {
@@ -37,7 +38,7 @@ export interface AgentRunResult {
 
 export class AgentLoop {
   private todoManager: TodoManager
-  private messages: Message[] = []
+  private messageManager = new MessageManager()
   private provider: LLMProvider
   private tools: ToolRegistry
   private systemPrompt: string
@@ -60,7 +61,7 @@ export class AgentLoop {
     this.todoManager = options.todoManager
   }
 
-  private emit(event: 'run:complete', messages: Message[]): void {
+  private emit(event: 'run:complete', messages: readonly Message[]): void {
     this.emitter.emit(event, messages)
   }
 
@@ -81,7 +82,7 @@ export class AgentLoop {
       return { success: true, text: '', reason: 'completed' }
     }
 
-    this.messages.push({ role: 'user', content: userInput })
+    this.messageManager.addUserMessage(userInput)
 
     let lastAssistantText = ''
     let success = false
@@ -97,18 +98,18 @@ export class AgentLoop {
       // 检查提醒
       if (this.todoManager.needsReminder()) {
         const reminder = '\n\n[Reminder] You have an active todo list...'
-        this.messages.push({ role: 'user', content: reminder })
+        this.messageManager.addUserMessage(reminder)
       }
 
-      const checkpoint = this.messages.length
-      const result = await this.streamLLMResponse(checkpoint)
+      const checkpointId = `iteration-${i}`
+      const result = await this.streamLLMResponse(checkpointId)
       if (!result) {
         reason = 'error'
         break // streaming 失败，已回滚
       }
 
       if (result.toolCalls.length === 0) {
-        this.messages.push({ role: 'assistant', content: result.text })
+        this.messageManager.addAssistantMessage(result.text)
         lastAssistantText = result.text
         success = true
         reason = 'completed'
@@ -116,14 +117,10 @@ export class AgentLoop {
         break
       }
 
-      this.messages.push({
-        role: 'assistant',
-        content: result.text,
-        toolCalls: result.toolCalls,
-      })
+      this.messageManager.addAssistantMessage(result.text, result.toolCalls)
       await this.executeToolCalls(result.toolCalls)
     }
-    this.emit('run:complete', this.messages)
+    this.emit('run:complete', this.messageManager.getMessages())
 
     if (this.todoManager.hasTodos()) {
       const stats = this.todoManager.getStats()
@@ -145,9 +142,9 @@ export class AgentLoop {
       return false
 
     const ctx: CommandContext = {
-      messages: this.messages,
+      messages: this.messageManager.getMessages() as Message[],
       setMessages: (msgs) => {
-        this.messages = msgs
+        this.messageManager.setMessages(msgs)
       },
       provider: this.provider,
       compaction: this.compaction,
@@ -164,14 +161,17 @@ export class AgentLoop {
    * checkpoint 用于失败时回滚 messages 到调用前的状态。
    */
   private async streamLLMResponse(
-    checkpoint: number,
+    checkpointId: string,
   ): Promise<StreamResult | null> {
+    // 创建 checkpoint
+    this.messageManager.createCheckpoint(checkpointId)
+
     let text = ''
     let toolCalls: ToolCall[] = []
     const renderer = new TerminalRenderer()
     try {
       for await (const event of this.provider.chatStream(
-        this.messages,
+        this.messageManager.getMessages(),
         this.tools.getDefinitions(),
         this.systemPrompt,
       )) {
@@ -199,6 +199,7 @@ export class AgentLoop {
         if (!this.silent) {
           renderer.flush()
         }
+        this.messageManager.rollback(checkpointId)
         return null
       }
 
@@ -206,7 +207,7 @@ export class AgentLoop {
       if (!this.silent) {
         console.error(`\n[Error]: ${msg}`)
       }
-      this.messages.length = checkpoint
+      this.messageManager.rollback(checkpointId)
       return null
     }
 
@@ -214,9 +215,13 @@ export class AgentLoop {
       renderer.flush()
     }
 
-    if (signal.aborted)
+    if (signal.aborted) {
+      this.messageManager.rollback(checkpointId)
       return null
+    }
 
+    // 成功时清理 checkpoint
+    this.messageManager.clearCheckpoint(checkpointId)
     return { text, toolCalls }
   }
 
@@ -224,11 +229,10 @@ export class AgentLoop {
     for (const tc of toolCalls) {
       const tool = this.tools.get(tc.name)
       if (!tool) {
-        this.messages.push({
-          role: 'tool',
-          content: `Error: Unknown tool "${tc.name}"`,
-          toolCallId: tc.id,
-        })
+        this.messageManager.addToolResult(
+          tc.id,
+          `Error: Unknown tool "${tc.name}"`,
+        )
         continue
       }
 
@@ -253,28 +257,30 @@ export class AgentLoop {
         `[Tool]: ${tc.name}'s result is:(${JSON.stringify(truncatedResult)})`,
       ) */
 
-      this.messages.push({
-        role: 'tool',
-        content: truncatedResult,
-        toolCallId: tc.id,
-      })
+      this.messageManager.addToolResult(
+        tc.id,
+        truncatedResult,
+      )
     }
   }
 
   private async compactIfNeeded(): Promise<void> {
-    if (!this.compaction.shouldCompact(this.messages, this.systemPrompt))
+    const messages = this.messageManager.getMessages()
+    if (!this.compaction.shouldCompact(messages, this.systemPrompt))
       return
 
     if (!this.silent) {
       console.log('\n[Compaction]: context approaching limit, compacting...')
     }
-    this.messages = await this.compaction.compact(this.messages, this.provider)
+    const compactedMessages = await this.compaction.compact(messages, this.provider)
+    this.messageManager.setMessages(compactedMessages)
+
     if (!this.silent) {
       console.log('[Compaction]: done.')
     }
   }
 
   setMessages(messages: Message[]): void {
-    this.messages = messages
+    this.messageManager.setMessages(messages)
   }
 }

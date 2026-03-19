@@ -3,7 +3,7 @@ import type { LLMProvider, Message } from '../llm/provider.js'
 import type { SessionStore } from '../memory/session-store.js'
 
 export interface CommandContext {
-  messages: Message[];
+  messages: readonly Message[];
   setMessages: (messages: Message[]) => void;
   provider: LLMProvider;
   compaction: Compaction;

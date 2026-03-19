@@ -32,7 +32,7 @@ export interface LLMProvider {
     systemPrompt?: string,
   ) => Promise<ChatResult>;
   chatStream: (
-    messages: Message[],
+    messages: readonly Message[],
     tools?: ToolDefinition[],
     systemPrompt?: string,
   ) => AsyncIterable<StreamEvent>;

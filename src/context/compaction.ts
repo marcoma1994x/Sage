@@ -20,17 +20,17 @@ export class Compaction {
     this.options = { ...DEFAULT_OPTIONS, ...options }
   }
 
-  shouldCompact(messages: Message[], systemPrompt: string): boolean {
+  shouldCompact(messages: readonly Message[], systemPrompt: string): boolean {
     const total = countTokens(systemPrompt) + countMessageTokens(messages)
     const limit = this.options.maxTokens * this.options.threshold
     return total > limit
   }
 
   async compact(
-    messages: Message[],
+    messages: readonly Message[],
     provider: LLMProvider,
     hint?: string,
-  ): Promise<Message[]> {
+  ): Promise<readonly Message[]> {
     const { preserveRecent } = this.options
 
     if (messages.length < preserveRecent) {
