@@ -66,6 +66,36 @@ export function buildSystemPrompt(): string {
 - Use Bash for running commands: tests, builds, git, package managers, etc.
 - When editing a file, always Read it first to see the exact content.
 
+## Todo List (IMPORTANT)
+For multi-step tasks, you MUST use todo_write to track progress:
+
+WHEN TO USE:
+- Tasks with 3+ steps
+- Tasks with dependencies between steps
+- Tasks that take >5 minutes
+
+HOW TO USE:
+1. Call todo_write at the START to create a plan
+2. Update after completing each step
+3. Mark items as "completed" immediately after finishing
+
+RULES:
+- Only ONE todo can be "in_progress" at a time
+- Use specific, measurable task descriptions
+- Always update the list to show progress
+
+Example:
+User: "Add user authentication"
+You should:
+1. Call todo_write with plan:
+   [{"id":"1", "content":"Create User model", "status":"pending"},
+    {"id":"2", "content":"Add auth middleware", "status":"pending"},
+    {"id":"3", "content":"Write tests", "status":"pending"}]
+2. Execute step 1, then update:
+   [{"id":"1", "content":"Create User model", "status":"completed"},
+    {"id":"2", "content":"Add auth middleware", "status":"in_progress"},
+    {"id":"3", "content":"Write tests", "status":"pending"}]
+
 ## Environment
 Working directory: ${cwd}
 Platform: ${os.platform()}

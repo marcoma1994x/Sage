@@ -52,8 +52,7 @@ export class App {
 
       try {
         signal.start()
-        const result = await this.agent.run(input)
-        console.log(result)
+        await this.agent.run(input)
       }
       catch (err) {
         console.error('[Error]', err instanceof Error ? err.message : err)
