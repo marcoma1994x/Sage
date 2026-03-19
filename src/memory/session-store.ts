@@ -94,8 +94,8 @@ export class SessionStore {
   }
 
   /** 保存会话（写文件 + 更新索引） */
-  save(messages: Message[]): void {
-    this.session.messages = messages
+  save(messages: readonly Message[]): void {
+    this.session.messages = messages as Message[]
     this.session.updatedAt = new Date().toISOString()
     this.session.messageCount = this.session.messages.length
 

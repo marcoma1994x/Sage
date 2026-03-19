@@ -1,15 +1,15 @@
 import type { CommandRegistry } from '../commands/registry.js'
 import type { CommandContext } from '../commands/type.js'
-import type { LLMProvider, Message, ToolCall } from '../llm/provider.js'
+import type { MessageManager } from '../context/message-manager.js'
 
+import type { LLMProvider, Message, ToolCall } from '../llm/provider.js'
 import type { SessionStore } from '../memory/session-store.js'
 import type { TodoManager } from '../planning/todo-manager.js'
 import type { ToolRegistry } from '../tools/registry.js'
-import type { AgentLoopEvents } from './events.js'
 
+import type { AgentLoopEvents } from './events.js'
 import { EventEmitter } from 'node:events'
 import { Compaction } from '../context/compaction.js'
-import { MessageManager } from '../context/message-manager.js'
 import { signal } from '../process/signal.js'
 import { withTimeout } from '../utils/timeout.js'
 import { truncateToolResult } from '../utils/truncate.js'
@@ -22,6 +22,7 @@ interface AgentLoopOptions {
   sessionStore?: SessionStore; // 只给 commands 用
   maxIterations: number;
   todoManager: TodoManager;
+  messageManager: MessageManager
 }
 
 interface StreamResult {
@@ -37,7 +38,7 @@ export interface AgentRunResult {
 
 export class AgentLoop {
   private todoManager: TodoManager
-  private messageManager = new MessageManager()
+  private messageManager: MessageManager
   private provider: LLMProvider
   private tools: ToolRegistry
   private systemPrompt: string
@@ -56,6 +57,7 @@ export class AgentLoop {
     this.MAX_ITERATIONS = options.maxIterations ?? 20
     this.sessionStore = options.sessionStore
     this.todoManager = options.todoManager
+    this.messageManager = options.messageManager
   }
 
   /**

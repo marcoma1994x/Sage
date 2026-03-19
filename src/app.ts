@@ -1,11 +1,9 @@
-import type { AgentLoop } from './agent/agent-loop.js'
-
+import type { AgentRunner } from './agent/agent-runner.js'
 import process from 'node:process'
 import * as readLine from 'node:readline'
 import chalk from 'chalk'
 import { createAgent } from './agent/factory.js'
 import { setTerminal } from './io/terminal.js'
-import { SessionStore } from './memory/session-store.js'
 import { signal } from './process/signal.js'
 
 export interface AppOptions {
@@ -15,26 +13,12 @@ export interface AppOptions {
 
 export class App {
   private rl: readLine.Interface
-  private agent: AgentLoop
-  private sessionStore: SessionStore
+  private agent: AgentRunner
 
   constructor(options: AppOptions) {
     this.rl = this.createReadline()
 
-    this.sessionStore = new SessionStore({
-      cwd: process.cwd(),
-      model: options.modelName,
-      resumeId: options.resumeSessionId,
-    })
-    this.agent = createAgent(options, this.sessionStore)
-
-    // 恢复历史消息
-    this.agent.setMessages([...this.sessionStore.session.messages])
-
-    // 订阅 run 完成事件
-    this.agent.on('run:complete', (messages) => {
-      this.sessionStore.save(messages)
-    })
+    this.agent = createAgent(options)
 
     this.setupSignalHandlers()
   }

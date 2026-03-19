@@ -4,7 +4,7 @@ import type { SessionStore } from '../memory/session-store.js'
 
 export interface CommandContext {
   messages: readonly Message[];
-  setMessages: (messages: Message[]) => void;
+  setMessages: (messages: readonly Message[]) => void;
   provider: LLMProvider;
   compaction: Compaction;
   systemPrompt: string;

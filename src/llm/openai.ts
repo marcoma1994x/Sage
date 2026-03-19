@@ -24,7 +24,7 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async chat(
-    messages: Message[],
+    messages: readonly Message[],
     tools?: ToolDefinition[],
     systemPrompt?: string,
   ): Promise<ChatResult> {
@@ -67,7 +67,7 @@ export class OpenAIProvider implements LLMProvider {
    * for await 循环抛出 AbortError，由调用方捕获处理。
    */
   async* chatStream(
-    messages: Message[],
+    messages: readonly Message[],
     tools?: ToolDefinition[],
     systemPrompt?: string,
   ): AsyncIterable<StreamEvent> {
@@ -163,7 +163,7 @@ export class OpenAIProvider implements LLMProvider {
    * - tool → role: "tool" + tool_call_id
    */
   private convertMessages(
-    messages: Message[],
+    messages: readonly Message[],
     systemPrompt?: string,
   ): OpenAI.ChatCompletionMessageParam[] {
     const result: OpenAI.ChatCompletionMessageParam[] = []
