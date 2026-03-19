@@ -56,42 +56,89 @@ export class AgentRunner {
    * 监听 AgentLoop 的事件并输出到终端
    */
   private setupListeners(): void {
+    let llmStartTime: number
+    let toolStartTime: number
+
+    this.agent.on('llm:start', () => {
+      llmStartTime = Date.now()
+      console.log('🤖 LLM thinking...')
+    })
     // 1. LLM 流式文本输出
     this.agent.on('llm:text', ({ text }) => {
       this.renderer.write(text)
     })
 
-    // 2. 工具调用开始
-    this.agent.on('tool:start', ({ name }) => {
-      // 清空渲染缓冲区，确保工具提示在新行显示
+    this.agent.on('llm:done', ({ toolCalls }) => {
+      const duration = (Date.now() - llmStartTime) / 1000
       this.renderer.flush()
-      console.log(`\n[Tool]: invoke tool「${name}」`)
+      console.log(`✓ LLM done (${duration}s)`)
+      if (toolCalls.length > 0) {
+        console.log(`  └─ Tool calls: ${toolCalls.length}`)
+      }
     })
 
-    // 3. 工具执行错误
-    this.agent.on('tool:error', ({ name, error }) => {
-      console.error(`[Tool Error]: ${name} failed: ${error}`)
+    this.agent.on('llm:error', ({ error }) => {
+      this.renderer.flush()
+      console.error(`\n❌ LLM Error: ${error.message}`)
     })
 
-    // 4. LLM 调用错误
+    this.agent.on('tool:start', ({ name, input }) => {
+      toolStartTime = Date.now()
+      this.renderer.flush()
+      console.log(`\n🔧 ${name}`)
+      const inputStr = JSON.stringify(input, null, 2)
+        .split('\n')
+        .slice(0, 5) // 只显示前 5 行
+        .join('\n')
+      console.log(`  ├─ Input: ${inputStr}`)
+    })
+
+    this.agent.on('tool:done', ({ result }) => {
+      const duration = (Date.now() - toolStartTime) / 1000
+      console.log(`  ├─ Duration: ${duration}ms`)
+
+      const resultStr
+        = result.length > 200 ? `${result.slice(0, 200)}... (truncated)` : result
+      console.log(`  └─ Result: ${resultStr}`)
+    })
+
+    this.agent.on('tool:error', ({ error }) => {
+      console.error(`  └─ ❌ Error: ${error}`)
+    })
+
+    // 5. LLM 调用错误
     this.agent.on('llm:error', ({ error }) => {
       // 清空渲染缓冲区，确保错误信息在新行显示
       this.renderer.flush()
       console.error(`\n[Error]: ${error.message}`)
     })
-    // 5. Compaction 开始
+
     this.agent.on('compaction:start', () => {
-      console.log('\n[Compaction]: context approaching limit, compacting...')
+      console.log('\n📦 Compacting context (approaching limit)...')
     })
 
-    // 6. Compaction 完成
-    this.agent.on('compaction:done', () => {
-      console.log('[Compaction]: done.')
+    this.agent.on('compaction:done', ({ compactedMessages }) => {
+      console.log(`✓ Compaction done (${compactedMessages.length}  messages)`)
     })
 
-    // 订阅 run 完成事件
-    this.agent.on('run:complete', ({ messages }) => {
-      this.sessionStore.save(messages)
+    this.agent.on(
+      'run:complete',
+      ({ messages, iteration, reason }) => {
+        this.sessionStore.save(messages)
+
+        const statusIcon = reason === 'completed' ? '✅' : '⚠️'
+        console.log(
+          `\n${statusIcon} Task ${reason} (${iteration} iterations)`,
+        )
+      },
+    )
+
+    this.agent.on('iteration:start', ({ iteration }) => {
+      console.log(`\n━━━ Iteration ${iteration} ━━━`)
+    })
+
+    this.agent.on('iteration:end', ({ iteration }) => {
+      console.log(`━━━ Iteration ${iteration} completed ━━━\n`)
     })
   }
 }

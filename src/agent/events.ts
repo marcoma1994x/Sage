@@ -82,12 +82,16 @@ export interface AgentLoopEvents {
    * 压缩完成
    * 在 compaction.compact() 成功返回后触发
    */
-  'compaction:done': void;
+  'compaction:done': { compactedMessages: readonly Message[] };
 
   // ============ 运行结果事件 ============
   /**
    * 运行完成
    * 在 run() 方法结束时触发（无论成功或失败）
    */
-  'run:complete': { messages: readonly Message[] };
+  'run:complete': {
+    messages: readonly Message[];
+    iteration: number;
+    reason: string;
+  };
 }

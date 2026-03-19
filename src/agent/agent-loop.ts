@@ -107,7 +107,8 @@ export class AgentLoop {
     let success = false
     let reason: AgentRunResult['reason'] = 'max_iterations'
 
-    for (let i = 0; i < this.MAX_ITERATIONS; i++) {
+    let i = 0
+    for (; i < this.MAX_ITERATIONS; i++) {
       // 发出迭代开始事件
       this.emit('iteration:start', { iteration: i + 1 })
 
@@ -144,7 +145,7 @@ export class AgentLoop {
       // 发出迭代结束事件
       this.emit('iteration:end', { iteration: i + 1 })
     }
-    this.emit('run:complete', { messages: this.messageManager.getMessages() })
+    this.emit('run:complete', { messages: this.messageManager.getMessages(), iteration: i + 1, reason })
 
     if (this.todoManager.hasTodos()) {
       const stats = this.todoManager.getStats()
@@ -291,7 +292,7 @@ export class AgentLoop {
       this.provider,
     )
     // 发出压缩完成事件
-    this.emit('compaction:done')
+    this.emit('compaction:done', { compactedMessages })
     this.messageManager.setMessages(compactedMessages)
   }
 
