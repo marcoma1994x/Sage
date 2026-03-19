@@ -1,14 +1,14 @@
 // src/orchestration/utils.ts
 
 import type { ToolRegistry } from '../tools/registry.js'
-import { createToolRegistry } from '../tools/setup.js'
+import { setupActionTools } from '../tools/setup.js'
 
 /**
  * 创建子 agent 的工具集
  * 包含所有基础工具，但不含 Task（防止递归）
  */
 export function createSubAgentToolRegistry(): ToolRegistry {
-  return createToolRegistry({ includeTask: false })
+  return setupActionTools({ includeTask: false })
 }
 
 /**

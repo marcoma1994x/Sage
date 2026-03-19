@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 
 // fs.readFileSync 而不是 fs/promises — system prompt 在启动时构建一次，同步读取更简单
 function loadFileIfExists(filePath: string): string | null {
@@ -42,13 +43,13 @@ function loadSageConfigs(cwd: string): string {
   return configs.map(c => `## ${c.label}\n\n${c.content}`).join('\n')
 }
 
-export function buildSystemPrompt(cwd: string): string {
+export function buildSystemPrompt(): string {
   const date = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   })
-
+  const cwd = process.cwd()
   const userConfigs = loadSageConfigs(cwd)
 
   return `You are Sage, an interactive CLI tool that helps users with software engineering tasks.

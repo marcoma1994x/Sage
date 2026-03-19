@@ -10,7 +10,7 @@ const TRUNCATION_NOTICE
 
 export function truncateToolResult(content: string): string {
   const tokens = countTokens(content)
-  console.log(`[Truncate]: content has ${tokens} tokens, limit is ${MAX_TOOL_RESULT_TOKENS}`)
+  /*   console.log(`[Truncate]: content has ${tokens} tokens, limit is ${MAX_TOOL_RESULT_TOKENS}`) */
   if (tokens <= MAX_TOOL_RESULT_TOKENS)
     return content
 

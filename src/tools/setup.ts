@@ -17,7 +17,7 @@ const commonTools = [
   globTool,
 ]
 
-export function createToolRegistry(options?: {
+export function setupActionTools(options?: {
   includeTask?: boolean;
   provider?: LLMProvider;
 }): ToolRegistry {
@@ -25,6 +25,7 @@ export function createToolRegistry(options?: {
   commonTools.forEach((t) => {
     registry.register(t)
   })
+  // includeTask 为 false 时不注册 sub-agent
   if (options?.includeTask !== false && options?.provider) {
     registry.register(createTaskTool(options.provider))
   }

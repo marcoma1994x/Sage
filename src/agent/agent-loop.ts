@@ -3,9 +3,10 @@ import type { CommandContext } from '../commands/type.js'
 import type { LLMProvider, Message, ToolCall } from '../llm/provider.js'
 
 import type { SessionStore } from '../memory/session-store.js'
+import type { TodoManager } from '../planning/todo-manager.js'
 import type { ToolRegistry } from '../tools/registry.js'
 import { EventEmitter } from 'node:events'
-import process from 'node:process'
+
 import { Compaction } from '../context/compaction.js'
 import { TerminalRenderer } from '../io/renderer.js'
 import { signal } from '../process/signal.js'
@@ -20,6 +21,7 @@ interface AgentLoopOptions {
   sessionStore?: SessionStore; // 只给 commands 用
   maxIterations: number;
   silent?: boolean; // 静默模式 - subagent 中使用
+  todoManager: TodoManager
 }
 
 interface StreamResult {
@@ -34,6 +36,7 @@ export interface AgentRunResult {
 }
 
 export class AgentLoop {
+  private todoManager: TodoManager
   private messages: Message[] = []
   private provider: LLMProvider
   private tools: ToolRegistry
@@ -54,23 +57,16 @@ export class AgentLoop {
     this.MAX_ITERATIONS = options.maxIterations ?? 20
     this.sessionStore = options.sessionStore
     this.silent = options.silent ?? false
-  }
-
-  on(event: 'run:complete', listener: (messages: Message[]) => void): this {
-    this.emitter.on(event, listener)
-    return this
+    this.todoManager = options.todoManager
   }
 
   private emit(event: 'run:complete', messages: Message[]): void {
     this.emitter.emit(event, messages)
   }
 
-  getMessages(): Message[] {
-    return this.messages
-  }
-
-  setMessages(messages: Message[]): void {
-    this.messages = messages
+  on(event: 'run:complete', listener: (messages: Message[]) => void): this {
+    this.emitter.on(event, listener)
+    return this
   }
 
   /**
@@ -96,6 +92,7 @@ export class AgentLoop {
         reason = 'interrupted'
         break
       }
+      this.todoManager.incrementRound()
 
       const checkpoint = this.messages.length
       const result = await this.streamLLMResponse(checkpoint)
@@ -157,7 +154,6 @@ export class AgentLoop {
     let text = ''
     let toolCalls: ToolCall[] = []
     const renderer = new TerminalRenderer()
-
     try {
       for await (const event of this.provider.chatStream(
         this.messages,
@@ -244,7 +240,9 @@ export class AgentLoop {
 
       this.messages.push({
         role: 'tool',
-        content: truncatedResult,
+        content: this.todoManager.needsReminder()
+          ? `<reminder>Update your todo list to track progress.</reminder>\n\n${truncatedResult}`
+          : truncatedResult,
         toolCallId: tc.id,
       })
     }
@@ -263,8 +261,7 @@ export class AgentLoop {
     }
   }
 
-  resetSession(): void {
-    this.messages = []
-    this.sessionStore?.reset(process.cwd(), this.provider.modelName)
+  setMessages(messages: Message[]): void {
+    this.messages = messages
   }
 }
