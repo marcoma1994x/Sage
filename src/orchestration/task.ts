@@ -1,4 +1,5 @@
 import type { LLMProvider } from '../llm/provider.js'
+import type { TodoManager } from '../planning/todo-manager.js'
 import type { Tool, ToolResult } from '../tools/type.js'
 import chalk from 'chalk'
 import { AgentLoop } from '../agent/agent-loop.js'
@@ -15,7 +16,7 @@ interface TaskInput {
  * 子 agent 有自己的 context 和完整工具集（除了 Task 本身），
  * 执行完成后返回摘要给主 agent。
  */
-export function createTaskTool(provider: LLMProvider): Tool {
+export function createTaskTool(provider: LLMProvider, todoManager: TodoManager): Tool {
   return {
     definition: {
       name: 'Task',
@@ -52,10 +53,11 @@ export function createTaskTool(provider: LLMProvider): Tool {
       // 创建子 agent
       const subAgent = new AgentLoop({
         provider,
-        tools: createSubAgentToolRegistry(),
+        tools: createSubAgentToolRegistry({ provider, todoManager }),
         systemPrompt: buildSubAgentPrompt(),
         maxIterations: max_iterations,
         silent: true,
+        todoManager,
       })
 
       // 执行子任务

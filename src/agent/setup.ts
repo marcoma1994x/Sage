@@ -38,7 +38,7 @@ export function setupAgent(provider?: LLMProvider): AgentDependencies {
   const todoManager = new TodoManager()
 
   // 2. 注册 Action tools
-  const tools = setupActionTools({ provider })
+  const tools = setupActionTools({ provider, todoManager })
 
   // 3. 注册 Planning tools
   tools.register(createTodoWriteTool(todoManager))

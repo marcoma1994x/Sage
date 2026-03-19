@@ -1,5 +1,7 @@
 // src/orchestration/utils.ts
 
+import type { LLMProvider } from '../llm/provider.js'
+import type { TodoManager } from '../planning/todo-manager.js'
 import type { ToolRegistry } from '../tools/registry.js'
 import { setupActionTools } from '../tools/setup.js'
 
@@ -7,8 +9,9 @@ import { setupActionTools } from '../tools/setup.js'
  * 创建子 agent 的工具集
  * 包含所有基础工具，但不含 Task（防止递归）
  */
-export function createSubAgentToolRegistry(): ToolRegistry {
-  return setupActionTools({ includeTask: false })
+export function createSubAgentToolRegistry(options: { provider: LLMProvider, todoManager: TodoManager }): ToolRegistry {
+  const { provider, todoManager } = options
+  return setupActionTools({ includeTask: false, provider, todoManager })
 }
 
 /**
