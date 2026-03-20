@@ -153,11 +153,6 @@ export class SessionStore {
     this.saveIndex(index)
   }
 
-  /** 重置为新会话（/clear 用） */
-  reset(cwd: string, model: string): void {
-    (this as { session: Session }).session = this.createSession(cwd, model)
-  }
-
   resume(session: Session): void {
     (this as { session: Session }).session = session
   }

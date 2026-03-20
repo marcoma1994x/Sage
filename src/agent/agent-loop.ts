@@ -344,8 +344,4 @@ export class AgentLoop {
     this.emit('compaction:done', { compactedMessages })
     this.messageManager.setMessages(compactedMessages)
   }
-
-  setMessages(messages: Message[]): void {
-    this.messageManager.setMessages(messages)
-  }
 }

@@ -7,14 +7,6 @@ export class CommandRegistry {
     this.commands.set(command.name, command)
   }
 
-  get(name: string): Command | undefined {
-    return this.commands.get(name)
-  }
-
-  getAll(): Command[] {
-    return [...this.commands.values()]
-  }
-
   isCommand(input: string): boolean {
     return input.trimStart().startsWith('/')
   }
