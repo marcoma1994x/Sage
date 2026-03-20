@@ -10,7 +10,7 @@ interface ReadInput {
 
 export const readTool: Tool = {
   definition: {
-    name: 'read',
+    name: 'Read',
     description: 'Reads a file from the local filesystem and returns its contents with line numbers.',
     inputSchema: {
       type: 'object',

@@ -2,7 +2,12 @@ import type { CommandRegistry } from '../commands/registry.js'
 import type { CommandContext } from '../commands/type.js'
 import type { MessageManager } from '../context/message-manager.js'
 
-import type { ChatResult, LLMProvider, Message, ToolCall } from '../llm/provider.js'
+import type {
+  ChatResult,
+  LLMProvider,
+  Message,
+  ToolCall,
+} from '../llm/provider.js'
 import type { SessionStore } from '../memory/session-store.js'
 import type { TodoManager } from '../planning/todo-manager.js'
 import type { ToolRegistry } from '../tools/registry.js'
@@ -10,6 +15,7 @@ import type { ToolRegistry } from '../tools/registry.js'
 import type { AgentLoopEvents } from './events.js'
 import { EventEmitter } from 'node:events'
 import { Compaction } from '../context/compaction.js'
+import { Orchestrator } from '../orchestration/orchestrator.js'
 import { signal } from '../process/signal.js'
 import { withTimeout } from '../utils/timeout.js'
 import { truncateToolResult } from '../utils/truncate.js'
@@ -22,7 +28,8 @@ interface AgentLoopOptions {
   sessionStore?: SessionStore; // 只给 commands 用
   maxIterations: number;
   todoManager: TodoManager;
-  messageManager: MessageManager
+  messageManager: MessageManager;
+  isSubAgent?: boolean;
 }
 
 export interface AgentRunResult {
@@ -42,17 +49,41 @@ export class AgentLoop {
   private MAX_ITERATIONS = 20
   private emitter = new EventEmitter()
   private sessionStore?: SessionStore
+  private orchestrator?: Orchestrator
 
   constructor(options: AgentLoopOptions) {
-    this.provider = options.provider
-    this.tools = options.tools
-    this.systemPrompt = options.systemPrompt
+    const {
+      provider,
+      tools,
+      systemPrompt,
+      commands,
+      maxIterations,
+      sessionStore,
+      todoManager,
+      messageManager,
+      isSubAgent,
+    } = options
+
+    this.provider = provider
+    this.tools = tools
+    this.systemPrompt = systemPrompt
     this.compaction = new Compaction()
-    this.commands = options.commands
-    this.MAX_ITERATIONS = options.maxIterations ?? 20
-    this.sessionStore = options.sessionStore
-    this.todoManager = options.todoManager
-    this.messageManager = options.messageManager
+    this.commands = commands
+    this.MAX_ITERATIONS = maxIterations ?? 20
+    this.sessionStore = sessionStore
+    this.todoManager = todoManager
+    this.messageManager = messageManager
+
+    // 创建 orchestrator（只在主 agent 中创建）
+    if (!isSubAgent) {
+      this.orchestrator = new Orchestrator({
+        tools: this.tools,
+        provider: this.provider,
+        todoManager: this.todoManager,
+        maxConcurrency: 7,
+        subAgentMaxIterations: 10,
+      })
+    }
   }
 
   /**
@@ -145,7 +176,11 @@ export class AgentLoop {
       // 发出迭代结束事件
       this.emit('iteration:end', { iteration: i + 1 })
     }
-    this.emit('run:complete', { messages: this.messageManager.getMessages(), iteration: i + 1, reason })
+    this.emit('run:complete', {
+      messages: this.messageManager.getMessages(),
+      iteration: i + 1,
+      reason,
+    })
 
     if (this.todoManager.hasTodos()) {
       const stats = this.todoManager.getStats()
@@ -241,6 +276,29 @@ export class AgentLoop {
   }
 
   private async executeToolCalls(toolCalls: ToolCall[]): Promise<void> {
+    // 主 agent 使用 orchestrator 编排任务
+    if (this.orchestrator) {
+      // 发出工具开始执行事件
+      this.emit('tool:start', { id: '', name: 'orchestrator', input: '' })
+      const results = await this.orchestrator.execute(toolCalls)
+
+      // 将结果添加到 messages
+      for (const result of results) {
+        this.emit('tool:done', {
+          id: result.toolCallId,
+          name:
+            toolCalls.find(tc => tc.id === result.toolCallId)?.name
+            ?? 'Unknown',
+          result: result.content,
+        })
+
+        this.messageManager.addToolResult(result.toolCallId, result.content)
+      }
+
+      return
+    }
+
+    // 子 agent 直接调用工具
     for (const tc of toolCalls) {
       const tool = this.tools.get(tc.name)
       if (!tool) {
@@ -253,9 +311,6 @@ export class AgentLoop {
 
       let toolResult: { content: string }
       try {
-        // 发出工具开始执行事件
-        this.emit('tool:start', { id: tc.id, name: tc.name, input: tc.input })
-
         toolResult = await withTimeout(tool.execute(tc.input), 30000, tc.name)
       }
       catch (err) {
@@ -268,12 +323,6 @@ export class AgentLoop {
       }
 
       const truncatedResult = truncateToolResult(toolResult.content)
-      // 发出工具完成事件
-      this.emit('tool:done', {
-        id: tc.id,
-        name: tc.name,
-        result: truncatedResult,
-      })
 
       this.messageManager.addToolResult(tc.id, truncatedResult)
     }

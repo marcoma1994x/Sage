@@ -1,6 +1,9 @@
-import type { ToolCall } from '../llm/provider.js'
+import type { LLMProvider, ToolCall } from '../llm/provider.js'
+import type { TodoManager } from '../planning/todo-manager.js'
 import type { ToolRegistry } from '../tools/registry.js'
 import { withTimeout } from '../utils/timeout.js'
+import { SubAgentPool } from './subagent-pool.js'
+import { SubAgentRunner } from './subagent-runner.js'
 
 export interface ToolResult {
   toolCallId: string;
@@ -8,8 +11,30 @@ export interface ToolResult {
   isError: boolean;
 }
 
-export class SubAgentOrchestrator {
-  constructor(private tools: ToolRegistry) {}
+export interface SubAgentOrchestratorOptions {
+  tools: ToolRegistry;
+  provider: LLMProvider;
+  todoManager: TodoManager;
+  maxConcurrency?: number;
+  subAgentMaxIterations?: number;
+}
+
+export class Orchestrator {
+  private pool: SubAgentPool
+  private subAgentRunner: SubAgentRunner
+
+  constructor(private options: SubAgentOrchestratorOptions) {
+    const { maxConcurrency, provider, todoManager, subAgentMaxIterations }
+      = options
+
+    this.pool = new SubAgentPool(maxConcurrency)
+
+    this.subAgentRunner = new SubAgentRunner({
+      provider,
+      todoManager,
+      maxIterations: subAgentMaxIterations ?? 10,
+    })
+  }
 
   /**
    * 执行 tool calls
@@ -28,7 +53,7 @@ export class SubAgentOrchestrator {
       results.push(result)
     }
 
-    // Step 3: 执行 Task 工具（并行）
+    // Step 3: 执行 Task 工具（并行 + 并发控制）
     if (taskCalls.length > 0) {
       const taskResults = await this.executeTasksInParallel(taskCalls)
       results.push(...taskResults)
@@ -71,33 +96,60 @@ export class SubAgentOrchestrator {
       const result = await this.executeSingleTool(taskCalls[0])
       return [result]
     }
-
-    // 多个 Task：并行执行
+    // 多个 Task：并行执行（受并发限制）
     console.log(`🚀 Spawning ${taskCalls.length} sub-agents in parallel...`)
 
-    const promises = taskCalls.map(tc => this.executeSingleTool(tc))
-    const results = await Promise.allSettled(promises)
+    const poolStatus = this.pool.getStatus()
+    if (taskCalls.length > poolStatus.maxConcurrency) {
+      console.log(
+        `📊 Pool: max ${poolStatus.maxConcurrency} concurrent, ${taskCalls.length - poolStatus.maxConcurrency} will queue`,
+      )
+    }
 
-    return results.map((r, i) => {
-      if (r.status === 'fulfilled') {
-        return r.value
+    // 创建任务数组（每个任务是一个返回 Promise 的函数）
+    const tasks = taskCalls.map(tc => () => this.executeSingleTool(tc))
+
+    // 通过 pool 执行（自动处理并发限制和队列）
+    const results = await this.pool.executeAll(tasks)
+
+    return results
+  }
+
+  /**
+   * 执行 Task tool call（委托给 SubAgentRunner）
+   */
+  private async executeTaskTool(tc: ToolCall): Promise<ToolResult> {
+    try {
+      const input = tc.input as { task: string }
+      const result = await this.subAgentRunner.execute(input.task)
+
+      return {
+        toolCallId: tc.id,
+        content: result,
+        isError: false,
       }
-      else {
-        // Promise rejected（不应该发生，因为 executeSingleTool 已捕获异常）
-        return {
-          toolCallId: taskCalls[i].id,
-          content: `Error: ${r.reason}`,
-          isError: true,
-        }
+    }
+    catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err)
+      return {
+        toolCallId: tc.id,
+        content: `Error: Sub-agent failed - ${errMsg}`,
+        isError: true,
       }
-    })
+    }
   }
 
   /**
    * 执行单个 tool call
    */
   private async executeSingleTool(tc: ToolCall): Promise<ToolResult> {
-    const tool = this.tools.get(tc.name)
+    // Task 类型任务使用 subAgent 处理
+    if (tc.name === 'Task') {
+      return this.executeTaskTool(tc)
+    }
+
+    // 其他工具直接调用
+    const tool = this.options.tools.get(tc.name)
 
     if (!tool) {
       return {

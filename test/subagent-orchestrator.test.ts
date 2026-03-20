@@ -1,5 +1,5 @@
 import type { Tool, ToolResult } from '../src/tools/type.js'
-import { SubAgentOrchestrator } from '../src/orchestration/subagent-orchestrator.js'
+import { Orchestrator } from '../src/orchestration/orchestrator.js'
 import { ToolRegistry } from '../src/tools/registry.js'
 
 const readTool: Tool = {
@@ -52,15 +52,24 @@ toolRegistry.register(readTool)
 toolRegistry.register(writeTool)
 toolRegistry.register(taskTool)
 
-const sub = new SubAgentOrchestrator(toolRegistry)
+const sub = new Orchestrator()
 
 console.time()
 
 const result = await sub.execute([
-  { id: '2', name: 'Task', input: {} },
-  { id: '4', name: 'Task', input: {} },
-  { id: '3', name: 'write', input: {} },
   { id: '1', name: 'read', input: {} },
+  { id: '2', name: 'Task', input: {} },
+  { id: '3', name: 'Task', input: {} },
+  { id: '4', name: 'Task', input: {} },
+  { id: '5', name: 'write', input: {} },
+
+  /*   { id: '6', name: 'Task', input: {} },
+  { id: '7', name: 'Task', input: {} },
+  { id: '8', name: 'Task', input: {} },
+  { id: '9', name: 'Task', input: {} },
+  { id: '10', name: 'Task', input: {} },
+  { id: '11', name: 'Task', input: {} },
+  { id: '12', name: 'Task', input: {} }, */
 
 ])
 console.timeEnd()

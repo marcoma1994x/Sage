@@ -40,7 +40,7 @@ export function setupAgent(
   const todoManager = new TodoManager()
 
   // 2. 注册 Action tools
-  const tools = setupActionTools({ provider, todoManager })
+  const tools = setupActionTools()
 
   // 3. 注册 Planning tools
   tools.register(createTodoWriteTool(todoManager))
