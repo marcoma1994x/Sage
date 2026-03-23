@@ -1,12 +1,13 @@
 import type { Tool, ToolResult } from './type.js'
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { check } from '../harness/harness.js'
 
 interface EditInput {
-  file_path: string
-  old_string: string
-  new_string: string
-  replace_all: boolean
+  file_path: string;
+  old_string: string;
+  new_string: string;
+  replace_all: boolean;
 }
 
 export const editTool: Tool = {
@@ -70,8 +71,11 @@ export const editTool: Tool = {
     await writeFile(filePath, newContent, 'utf-8')
 
     // 5. 返回结果
+    const diagnosis = check(newContent, filePath)
     const occurrences = content.split(input.old_string).length - 1
     const replaced = input.replace_all ? occurrences : 1
-    return { content: `Edited ${input.file_path}: replaced ${replaced} occurrence(s).` }
+    return {
+      content: `Edited ${filePath}: replaced ${replaced} occurrence(s).${diagnosis}`,
+    }
   },
 }

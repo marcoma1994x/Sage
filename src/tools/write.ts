@@ -1,6 +1,7 @@
 import type { Tool, ToolResult } from './type.js'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { check } from '../harness/harness.js'
 
 interface WriteInput {
   file_path: string
@@ -33,12 +34,16 @@ export const writeTool: Tool = {
   execute: async (raw: unknown): Promise<ToolResult> => {
     const input = raw as WriteInput
     const filePath = path.resolve(input.file_path)
-
+    const { content } = input
     try {
       // 确保目录存在
       await mkdir(path.dirname(filePath), { recursive: true })
-      await writeFile(filePath, input.content, 'utf-8')
-      return { content: `Written to ${input.file_path}` }
+      await writeFile(filePath, content, 'utf-8')
+      // --- Harness verification ---
+      const diagnosis = check(content, filePath)
+      return {
+        content: `Created ${filePath} (${content.length} bytes).${diagnosis}`,
+      }
     }
     catch (err) {
       return { content: `Error writing file: ${err}`, isError: true }
